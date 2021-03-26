@@ -159,7 +159,7 @@ void classifyStr(string str) {
         if(opCode.compare("001000") == 0){ // addi
             cout << "addi " << REG << strToUnsDec(rt) << ", " <<  REG << strToUnsDec(rs) << ", " << strToDec(im) << endl;
         } else if(opCode.compare("001001") == 0){ // addiu
-            cout << "addiu " << REG << strToUnsDec(rt) << ", " <<  REG << strToUnsDec(rs) << ", " << strToDec(im) << endl;
+            cout << "addiu " << REG << strToUnsDec(rt) << ", " <<  REG << strToUnsDec(rs) << ", " << strToUnsDec(im) << endl;
         } else if(opCode.compare("001100") == 0){ // andi
             cout << "andi " << REG << strToUnsDec(rt) << ", " <<  REG << strToUnsDec(rs) << ", " << strToDec(im) << endl;
         } else if(opCode.compare("000100") == 0){ // beq
@@ -185,7 +185,7 @@ void classifyStr(string str) {
         } else if(opCode.compare("001010") == 0){ // slti
             cout << "slti " << REG << strToUnsDec(rt) << ", " << REG << strToUnsDec(rs) << ", " << strToDec(im) << endl;
         } else if(opCode.compare("001011") == 0){ // sltiu
-            cout << "sltiu " << REG << strToUnsDec(rt) << ", " << REG << strToUnsDec(rs) << ", " << strToDec(im) << endl;
+            cout << "sltiu " << REG << strToUnsDec(rt) << ", " << REG << strToUnsDec(rs) << ", " << strToUnsDec(im) << endl;
         } else if(opCode.compare("101001") == 0){ // sh
             cout << "sh " << REG << strToUnsDec(rt) << ", " <<  strToDec(im) << "(" << REG << strToUnsDec(rs) << ")" << endl;
         } else if(opCode.compare("101011") == 0){ // sw
