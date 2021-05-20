@@ -164,7 +164,7 @@ void classifyStr(string str) {
         } else if(opCode.compare("100011") == 0){ // lw
             cout << "lw " << REG << strToDec(rt) << ", " <<  strToDec(im) << "(" << REG << strToDec(rs) << ")" << endl;
         } else if(opCode.compare("001101") == 0){ // ori
-            cout << "ori " << REG << strToDec(rt) << ", " <<  strToDec(rs) << ", " << strToDec(im) << endl;
+            cout << "ori " << REG << strToDec(rt) << ", " << REG <<  strToDec(rs) << ", " << strToDec(im) << endl;
         } else if(opCode.compare("101000") == 0){ // sb
             cout << "sb " << REG << strToDec(rt) << ", " <<  strToDec(im) << "(" << REG << strToDec(rs) << ")" << endl;
         } else if(opCode.compare("001010") == 0){ // slti
