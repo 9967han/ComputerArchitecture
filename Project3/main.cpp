@@ -25,10 +25,16 @@ void runBinaryStr(string str);
 void print(string str);
 void printRegisters();
 void init();
-int instNum = 0;
+void caching(int mem);
+void printCache();
+int instNum = 0, hitCnt=0, missCnt=0, total=0, temp=0;
 int registers[33];
 int dataMem[16385], instMem[16385];
 bool flag = false;
+struct block{
+    int LRU, Tag;
+};
+block cache[8][2];
 
 void charToHex(void *ptr, int buflen){
     unsigned char *buf = (unsigned char*)ptr;
@@ -76,11 +82,17 @@ int main(int argc, char** argv){
         if(!flag) runBinaryStr(bitset<32>(instMem[getInstMemIndex(registers[32])]).to_string());
         else break;
     }
+    cout << "Instructions: " << temp << endl;
+    cout << "Hits: " << hitCnt << endl;
+    cout << "Misses: " << missCnt << endl;
+    cout << "Total: " << total << endl;
     if(!strcmp(argv[3], "reg")) printRegisters();
     if(!strcmp(argv[3], "mem")) printMem(argv[4]);
 }
 
-void runBinaryStr(string str){
+void runBinaryStr(string str){   
+    temp++;
+    // cout << classifyStr(str) << endl;
     registers[32] += 4;
     string opCode = str.substr(0, 6);
     string rs = str.substr(6, 5);
@@ -97,6 +109,8 @@ void runBinaryStr(string str){
         // cout << opCode << " " << rs << " " << rt << " " << rd << " " << sa << " " << func << endl;
         if(func.compare("100000") == 0) { //add
             registers[rdInt] = registers[rsInt] + registers[rtInt];
+        } else if(func.compare("100001") == 0) { //addu
+            registers[rdInt] = registers[rsInt] + registers[rtInt];
         } else if(func.compare("100100") == 0) { //and
             registers[rdInt] = registers[rsInt] & registers[rtInt];
         } else if(func.compare("100101") == 0) { //or
@@ -104,6 +118,11 @@ void runBinaryStr(string str){
         } else if(func.compare("000000") == 0) { //sll
             registers[rdInt] = registers[rtInt] << saInt;
         } else if(func.compare("101010") == 0) { //slt
+            if(registers[rsInt] < registers[rtInt]) registers[rdInt] = 1;
+            else registers[rdInt] = 0;
+        } else if(func.compare("001000") == 0) { //jr
+            registers[32] = registers[rsInt];
+        } else if(func.compare("101011") == 0) { //sltu
             if(registers[rsInt] < registers[rtInt]) registers[rdInt] = 1;
             else registers[rdInt] = 0;
         } else if(func.compare("000010") == 0) { //srl
@@ -125,10 +144,21 @@ void runBinaryStr(string str){
         tmp = tmp >> 28;
         int nextAddr = instMem[getInstMemIndex(binaryStrToDec(bitset<4>(tmp).to_string() + lb))];
         registers[32] = getInstMemIndex(binaryStrToDec(bitset<4>(tmp).to_string() + lb)) * 4;
+    } else if(opCode.compare("000011") == 0) { // J-type jal
+        string lb = str.substr(6, 26);
+        lb = lb + "00";
+        registers[31] = registers[32];
+        registers[32] += 4;
+        int tmp = registers[32] & 0xF0000000;
+        tmp = tmp >> 28;
+        int nextAddr = instMem[getInstMemIndex(binaryStrToDec(bitset<4>(tmp).to_string() + lb))];
+        registers[32] = getInstMemIndex(binaryStrToDec(bitset<4>(tmp).to_string() + lb)) * 4;
     } else { // I-type
         string im = str.substr(16, 16);
         int imInt = binaryStrToDec(im);
         if(opCode.compare("001000") == 0){ // addi
+            registers[rtInt] = registers[rsInt] + imInt;
+        } else if(opCode.compare("001001") == 0){ // addiu
             registers[rtInt] = registers[rsInt] + imInt;
         } else if(opCode.compare("001100") == 0){ // andi
             imInt = zeroExtension(im);
@@ -145,6 +175,7 @@ void runBinaryStr(string str){
             }
         } else if(opCode.compare("100000") == 0){ // lb
             int dest = imInt + registers[rsInt];
+            caching(dest);
             if(dest%4 == 0){
                 registers[rtInt] = (dataMem[getDataMemIndex(dest)] & 0xFF000000) >> 24;
             } else if(dest%4 == 1){
@@ -176,6 +207,7 @@ void runBinaryStr(string str){
             registers[rtInt] = registers[rtInt] & 0x000000FF;
         } else if(opCode.compare("100001") == 0){ // lh
             int dest = imInt + registers[rsInt];
+            caching(dest);
             if(dest%4 == 0){
                 registers[rtInt] = (dataMem[getDataMemIndex(dest)] & 0xFFFF0000) >> 16;
             } else if(dest%4 == 1){
@@ -208,10 +240,11 @@ void runBinaryStr(string str){
             }
             registers[rtInt] = registers[rtInt] & 0x0000FFFF;
         } else if(opCode.compare("001111") == 0){ // lui
-            registers[rtInt] = registers[rtInt] & (0x0000FFFF);
-            registers[rtInt] = registers[rtInt] + (imInt << 16);
+            registers[rtInt] = registers[rtInt] & (0x00000000);
+            registers[rtInt] = registers[rtInt] | (imInt << 16);
         } else if(opCode.compare("100011") == 0){ // lw
             int dest = imInt + registers[rsInt];
+            caching(dest);
             registers[rtInt] = dataMem[getDataMemIndex(dest)];
         } else if(opCode.compare("001101") == 0){ // ori
             int imInt = zeroExtension(im);
@@ -219,6 +252,7 @@ void runBinaryStr(string str){
             // res = "ori " + string(REG) + strToDec(rt) + ", " + string(REG) +  strToDec(rs) + ", " + strToDec(im);
         } else if(opCode.compare("101000") == 0){ // sb
             int dest = imInt + registers[rsInt];
+            caching(dest);
             if(dest%4 == 0){
                 dataMem[getDataMemIndex(dest)] = (dataMem[getDataMemIndex(dest)] & 0x00FFFFFF);
                 dataMem[getDataMemIndex(dest)] |= ((registers[rtInt] & 0x000000FF) << 24);
@@ -240,6 +274,7 @@ void runBinaryStr(string str){
             else registers[rtInt] = 0;
         } else if(opCode.compare("101001") == 0){ // sh
             int dest = imInt + registers[rsInt];
+            caching(dest);
             if(dest%4 == 0){
                 dataMem[getDataMemIndex(dest)] = (dataMem[getDataMemIndex(dest)] & 0x0000FFFF);
                 dataMem[getDataMemIndex(dest)] |= ((registers[rtInt] & 0x0000FFFF) << 16);
@@ -261,6 +296,7 @@ void runBinaryStr(string str){
             }
         } else if(opCode.compare("101011") == 0){ // sw
             int dest = imInt + registers[rsInt];
+            caching(dest);
             dataMem[getDataMemIndex(dest)] = registers[rtInt];
         } else { //unknown instruction
             cout << "unknown instruction\n";
@@ -269,23 +305,71 @@ void runBinaryStr(string str){
     } 
     return;
 }
+
+void caching(int mem){
+    string tag, index, offset;
+    // cout << "tag : " << binaryStrToDec(tag) << endl;
+    // cout << "index : " << binaryStrToDec(index) << endl;
+    // cout << "offset : " << binaryStrToDec(offset) << endl;
+    string tmp = bitset<32>(mem).to_string();
+    tag = tmp.substr(0, 23);
+    index = tmp.substr(23, 3);
+    offset = tmp.substr(26, 6);
+    // cout << "tag: " << binaryStrToDec("0"+tag) << endl;
+    // cout << "index: " << binaryStrToDec("0"+index) << endl;
+    // cout << "offset: " << binaryStrToDec("0"+offset) << endl;
+    int tagInt = binaryStrToDec("0"+tag);
+    int indexInt = binaryStrToDec("0"+index);
+    int offsetInt = binaryStrToDec("0"+offset);
+    if(cache[indexInt][0].Tag == tagInt) {
+        hitCnt++;
+        cache[indexInt][0].LRU = 1;
+        cache[indexInt][1].LRU = 1;
+    } else if(cache[indexInt][1].Tag == tagInt) {
+        hitCnt++;
+        cache[indexInt][0].LRU = 0;
+        cache[indexInt][1].LRU = 0;
+    } else {
+        cache[indexInt][cache[indexInt][0].LRU].Tag = tagInt;
+        if(cache[indexInt][0].LRU == 0 || cache[indexInt][1].LRU == 0) {
+            cache[indexInt][0].LRU = 1;
+            cache[indexInt][1].LRU = 1;
+        } else if(cache[indexInt][0].LRU == 1 || cache[indexInt][1].LRU == 1) {
+            cache[indexInt][0].LRU = 0;
+            cache[indexInt][1].LRU = 0;
+        }
+        missCnt++;
+    }
+    total++;
+    // printCache();
+    return;
+}
+
+
 int getInstMemIndex(int cur){
     if(cur > 65536) return ERROR;
     else if(cur % 4 == 0) return cur/4;
     else return ERROR;
 }
 
+void printCache(){
+    for(int i=0; i<2; i++){
+        cout << "Cache " << i << "  : " << cache[0][i].Tag << endl;
+    }
+    return;
+}
+
 int getDataMemIndex(int cur){
-    if(cur < 0x10000000 || cur > 268500976) {
-        cout << "memory dump address range error\n";
-        exit(0);
-    }
+    // if(cur < 0x10000000 || cur > 268500976) {
+    //     cout << "memory dump address range error\n";
+    //     exit(0);
+    // }
     int next = (cur - 0x10000000);
-    if(next % 4 == 0) return next/4;
-    else {
-        cout << "Memory address alignment error\n";
-        exit(0);
-    }
+    return next/4;
+    // else {
+    //     cout << "Memory address alignment error\n";
+    //     exit(0);
+    // }
 }
 
 int zeroExtension(string str){
@@ -439,6 +523,12 @@ void init(){
     for(int i=0; i<16385; i++) {
         instMem[i] = -1;
         dataMem[i] = -1;
+    }
+    for(int i=0; i<8; i++){
+        for(int j=0; j<2; j++){
+            cache[i][j].LRU = 0;
+            cache[i][j].Tag = 0;
+        }
     }
     return;
 }
